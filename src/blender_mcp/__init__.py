@@ -1,6 +1,9 @@
-"""Blender integration through the Model Context Protocol."""
+"""Blender MCP slim — Model Context Protocol server for Blender and LLMs.
 
-__version__ = "0.1.0"
+Fork without telemetry and third-party service integrations.
+Original project: https://github.com/ahujasid/blender-mcp
+"""
 
-# Expose key classes and functions for easier imports
+__version__ = "1.5.5"
+
 from .server import BlenderConnection, get_blender_connection
