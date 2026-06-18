@@ -18,6 +18,7 @@ import inspect
 import json
 import logging
 import sys
+import threading
 import traceback
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
@@ -312,11 +313,21 @@ class FastMCP:
         return self._error_response(request_id, -32601, f"Method not found: {method}")
 
     async def _run_loop(self) -> None:
-        """Read JSON-RPC messages from stdin and write responses to stdout."""
+        """Read JSON-RPC messages from stdin and write responses to stdout.
+
+        stdin is read from a dedicated thread so the server also works on
+        Windows when stdin is a console handle instead of a pipe.
+        """
         loop = asyncio.get_running_loop()
-        reader = asyncio.StreamReader()
-        reader_protocol = asyncio.StreamReaderProtocol(reader)
-        await loop.connect_read_pipe(lambda: reader_protocol, sys.stdin.buffer)
+        message_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+        shutdown_event = threading.Event()
+
+        reader_thread = threading.Thread(
+            target=_sync_stdin_reader,
+            args=(loop, message_queue, shutdown_event),
+            daemon=True,
+        )
+        reader_thread.start()
 
         writer_transport, writer_protocol = await loop.connect_write_pipe(
             asyncio.streams.FlowControlMixin, sys.stdout.buffer
@@ -325,18 +336,24 @@ class FastMCP:
 
         try:
             while True:
-                message = await _read_message(reader)
-                if message is None:
-                    break
+                try:
+                    message = await asyncio.wait_for(message_queue.get(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    if shutdown_event.is_set():
+                        break
+                    continue
+
                 response = await self._handle_request(message)
                 if response is not None:
                     await _write_message(writer, response)
         finally:
+            shutdown_event.set()
             writer.close()
             try:
                 await writer.wait_closed()
             except Exception:
                 pass
+            reader_thread.join(timeout=1.0)
 
     def run(self) -> None:
         """Run the stdio MCP server."""
@@ -356,31 +373,45 @@ class FastMCP:
 # ---------------------------------------------------------------------------
 
 
-async def _read_message(reader: asyncio.StreamReader) -> Optional[Dict[str, Any]]:
-    """Read one Content-Length framed JSON-RPC message."""
-    content_length: Optional[int] = None
-    while True:
-        line = await reader.readline()
-        if not line:
-            return None
-        line_str = line.decode("utf-8", errors="replace").strip()
-        if line_str == "":
-            break
-        if line_str.lower().startswith("content-length:"):
-            try:
-                content_length = int(line_str.split(":", 1)[1].strip())
-            except ValueError:
-                content_length = None
-
-    if content_length is None:
-        return None
-
-    body = await reader.readexactly(content_length)
+def _sync_stdin_reader(
+    loop: asyncio.AbstractEventLoop,
+    queue: asyncio.Queue[Dict[str, Any]],
+    shutdown_event: threading.Event,
+) -> None:
+    """Synchronous stdin reader running in its own thread."""
+    stdin = sys.stdin.buffer
     try:
-        return json.loads(body.decode("utf-8"))
-    except json.JSONDecodeError as exc:
-        logger.error(f"Failed to decode JSON-RPC body: {exc}")
-        return None
+        while not shutdown_event.is_set():
+            headers: Dict[str, int] = {}
+            while True:
+                line = stdin.readline()
+                if not line:
+                    return
+                line_str = line.decode("utf-8", errors="replace").strip()
+                if line_str == "":
+                    break
+                if line_str.lower().startswith("content-length:"):
+                    try:
+                        headers["content-length"] = int(line_str.split(":", 1)[1].strip())
+                    except ValueError:
+                        pass
+
+            if "content-length" not in headers:
+                continue
+
+            body = stdin.read(headers["content-length"])
+            if len(body) < headers["content-length"]:
+                return
+
+            try:
+                message = json.loads(body.decode("utf-8"))
+            except json.JSONDecodeError as exc:
+                logger.error(f"Failed to decode JSON-RPC body: {exc}")
+                continue
+
+            asyncio.run_coroutine_threadsafe(queue.put(message), loop)
+    except Exception as exc:
+        logger.error(f"stdin reader thread error: {exc}")
 
 
 async def _write_message(writer: asyncio.StreamWriter, message: Dict[str, Any]) -> None:
