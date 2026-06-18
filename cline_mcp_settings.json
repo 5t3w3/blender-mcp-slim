@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "blender": {
+      "command": "C:\\Users\\stefa\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+      "args": [
+        "C:\\Users\\stefa\\Sync\\code-agent\\mcp_slim_outback\\main.py"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "BLENDER_HOST": "localhost",
+        "BLENDER_PORT": "9876"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
