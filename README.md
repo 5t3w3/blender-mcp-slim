@@ -4,6 +4,8 @@
 
 This is a **privacy-focused fork with core MCP functionality only** of [BlenderMCP](https://github.com/ahujasid/blender-mcp) by Siddharth Ahuja.
 
+It ships with **zero runtime dependencies** and can run offline once installed.
+
 **What was removed:**
 - All telemetry and data collection
 - Poly Haven integration
@@ -16,6 +18,7 @@ This is a **privacy-focused fork with core MCP functionality only** of [BlenderM
 
 ## Features
 
+- **Zero runtime dependencies**: Ships with a minimal, self-contained MCP server implementation — no Pydantic, HTTPX, Uvicorn, or other third-party packages are fetched at install or runtime.
 - **Two-way communication**: Connect AI assistants to Blender through a socket-based server
 - **Object manipulation**: Create, modify, and delete 3D objects in Blender
 - **Material control**: Apply and modify materials and colors
@@ -34,7 +37,9 @@ This is a **privacy-focused fork with core MCP functionality only** of [BlenderM
 
 - Blender 3.0 or newer
 - Python 3.10 or newer
-- uv package manager
+- uv package manager (used only to launch the server; the package itself has no runtime dependencies)
+
+The server is **fully offline-capable** after installation — `uvx blender-mcp-slim` does not need to download any Python packages at runtime.
 
 **macOS:**
 ```bash

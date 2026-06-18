@@ -1,5 +1,5 @@
 # blender_mcp_server.py
-from mcp.server.fastmcp import FastMCP, Context, Image
+from .mcp_minimal import FastMCP, Context, Image
 import socket
 import json
 import logging
