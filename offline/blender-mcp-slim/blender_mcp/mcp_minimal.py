@@ -206,7 +206,7 @@ class FastMCP:
             "jsonrpc": "2.0",
             "id": request_id,
             "result": {
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": client_version,
                 "capabilities": {
                     "tools": {},
                 },
@@ -316,8 +316,13 @@ class FastMCP:
         """Read JSON-RPC messages from stdin and write responses to stdout.
 
         stdin is read from a dedicated thread so the server also works on
-        Windows when stdin is a console handle instead of a pipe.
+        Windows when stdin is a console handle instead of a pipe. stdout is
+        written synchronously because asyncio pipe writes are not supported on
+        Windows by the default ProactorEventLoop.
         """
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(line_buffering=True)
+
         loop = asyncio.get_running_loop()
         message_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
         shutdown_event = threading.Event()
@@ -328,11 +333,6 @@ class FastMCP:
             daemon=True,
         )
         reader_thread.start()
-
-        writer_transport, writer_protocol = await loop.connect_write_pipe(
-            asyncio.streams.FlowControlMixin, sys.stdout.buffer
-        )
-        writer = asyncio.StreamWriter(writer_transport, writer_protocol, None, loop)
 
         try:
             while True:
@@ -345,14 +345,9 @@ class FastMCP:
 
                 response = await self._handle_request(message)
                 if response is not None:
-                    await _write_message(writer, response)
+                    _write_message_sync(response)
         finally:
             shutdown_event.set()
-            writer.close()
-            try:
-                await writer.wait_closed()
-            except Exception:
-                pass
             reader_thread.join(timeout=1.0)
 
     def run(self) -> None:
@@ -372,6 +367,18 @@ class FastMCP:
 # Content-Length framed stdio helpers
 # ---------------------------------------------------------------------------
 
+# Kilo Code 7.3.46 sends line-delimited JSON instead of the standard
+# Content-Length framed JSON-RPC. We detect the format from the first request
+# and respond in the same format.
+_transport_format = "content-length"
+
+
+def _set_transport_format(fmt: str) -> None:
+    global _transport_format
+    if _transport_format != fmt:
+        logger.info(f"Switching transport format to {fmt}")
+        _transport_format = fmt
+
 
 def _sync_stdin_reader(
     loop: asyncio.AbstractEventLoop,
@@ -382,40 +389,53 @@ def _sync_stdin_reader(
     stdin = sys.stdin.buffer
     try:
         while not shutdown_event.is_set():
-            headers: Dict[str, int] = {}
-            while True:
-                line = stdin.readline()
-                if not line:
-                    return
-                line_str = line.decode("utf-8", errors="replace").strip()
-                if line_str == "":
-                    break
-                if line_str.lower().startswith("content-length:"):
-                    try:
-                        headers["content-length"] = int(line_str.split(":", 1)[1].strip())
-                    except ValueError:
-                        pass
-
-            if "content-length" not in headers:
-                continue
-
-            body = stdin.read(headers["content-length"])
-            if len(body) < headers["content-length"]:
+            line = stdin.readline()
+            if not line:
                 return
 
-            try:
-                message = json.loads(body.decode("utf-8"))
-            except json.JSONDecodeError as exc:
-                logger.error(f"Failed to decode JSON-RPC body: {exc}")
+            line_str = line.decode("utf-8", errors="replace").strip()
+            if line_str == "":
                 continue
+
+            if line_str.lower().startswith("content-length:"):
+                _set_transport_format("content-length")
+                try:
+                    content_length = int(line_str.split(":", 1)[1].strip())
+                except ValueError:
+                    continue
+
+                # Read the blank line separator.
+                stdin.readline()
+
+                body = stdin.read(content_length)
+                if len(body) < content_length:
+                    return
+
+                try:
+                    message = json.loads(body.decode("utf-8"))
+                except json.JSONDecodeError as exc:
+                    logger.error(f"Failed to decode JSON-RPC body: {exc}")
+                    continue
+            else:
+                _set_transport_format("line-delimited")
+                try:
+                    message = json.loads(line_str)
+                except json.JSONDecodeError as exc:
+                    logger.error(f"Failed to decode line-delimited JSON: {exc}")
+                    continue
 
             asyncio.run_coroutine_threadsafe(queue.put(message), loop)
     except Exception as exc:
         logger.error(f"stdin reader thread error: {exc}")
 
 
-async def _write_message(writer: asyncio.StreamWriter, message: Dict[str, Any]) -> None:
+def _write_message_sync(message: Dict[str, Any]) -> None:
+    """Write a JSON-RPC message to stdout using the detected transport format."""
     body = json.dumps(message, ensure_ascii=False).encode("utf-8")
-    header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
-    writer.write(header + body)
-    await writer.drain()
+    if _transport_format == "line-delimited":
+        payload = body + b"\n"
+    else:
+        header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
+        payload = header + body
+    sys.stdout.buffer.write(payload)
+    sys.stdout.buffer.flush()

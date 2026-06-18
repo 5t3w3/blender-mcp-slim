@@ -11,9 +11,21 @@ import os
 
 
 # Configure logging
+# MCP clients must ignore stderr, but some (e.g. Kilo) merge stdout/stderr on stdio
+# transport, so we log to a file by default. Set BLENDER_MCP_LOG_STDERR=1 to keep
+# logging on stderr instead.
+_log_dir = os.path.dirname(os.path.abspath(__file__))
+_log_file = os.path.join(_log_dir, "blender_mcp_server.log")
+_log_handlers = []
+if os.environ.get("BLENDER_MCP_LOG_STDERR", "").lower() in ("1", "true", "yes"):
+    _log_handlers.append(logging.StreamHandler())
+else:
+    _log_handlers.append(logging.FileHandler(_log_file, mode="a", encoding="utf-8"))
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    handlers=_log_handlers)
 logger = logging.getLogger("BlenderMCPServer")
+logger.info(f"Logging to {'stderr' if os.environ.get('BLENDER_MCP_LOG_STDERR') else _log_file}")
 
 # Default configuration
 DEFAULT_HOST = "localhost"
