@@ -118,6 +118,29 @@ Go to Claude > Settings > Developer > Edit Config > `claude_desktop_config.json`
 
 > Only run one instance of the MCP server (either on Cursor or Claude Desktop), not both.
 
+### Offline / air-gapped installation
+
+Because the server has **zero runtime dependencies**, you can also run it on a machine that has no Internet access and no package manager installed.
+
+A pre-built offline bundle is included in this repository at `offline/blender-mcp-slim/`. To use it:
+
+```bash
+# Copy the directory to the offline machine, then run:
+python3 blender-mcp-slim/run.py
+```
+
+To re-create the bundle after source changes:
+
+```bash
+python3 scripts/build_offline_bundle.py
+```
+
+You can also run the server directly from a source checkout without installing anything:
+
+```bash
+python3 main.py
+```
+
 ### Installing the Blender Addon
 
 1. Download the `addon.py` file from this repo
