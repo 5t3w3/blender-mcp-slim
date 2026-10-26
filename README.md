@@ -35,6 +35,7 @@ This is a **privacy-focused fork with core MCP functionality only** of [BlenderM
 - Blender 3.0 or newer
 - Python 3.11 or newer
 - uv package manager
+- git (the server is installed directly from this GitHub repository)
 
 **macOS:**
 ```bash
@@ -60,6 +61,12 @@ Full installation instructions: [Install uv](https://docs.astral.sh/uv/getting-s
 - `BLENDER_HOST`: Host address for Blender socket server (default: `localhost`)
 - `BLENDER_PORT`: Port number for Blender socket server (default: `9876`)
 
+### Running from the GitHub repository
+
+This fork is **not published on PyPI**. Every example below installs the server directly from this GitHub repository using `--from git+https://github.com/5t3w3/blender-mcp-slim.git`, so `uvx` always runs the latest `main`. `git` must be installed and the machine needs network access to GitHub.
+
+To force uv to rebuild/re-fetch after an update, add `--refresh` right after `uvx`.
+
 ### Claude Desktop
 
 Go to Claude > Settings > Developer > Edit Config > `claude_desktop_config.json`:
@@ -70,6 +77,8 @@ Go to Claude > Settings > Developer > Edit Config > `claude_desktop_config.json`
         "blender": {
             "command": "uvx",
             "args": [
+                "--from",
+                "git+https://github.com/5t3w3/blender-mcp-slim.git",
                 "blender-mcp-slim"
             ]
         }
@@ -87,6 +96,8 @@ Go to Claude > Settings > Developer > Edit Config > `claude_desktop_config.json`
         "blender": {
             "command": "uvx",
             "args": [
+                "--from",
+                "git+https://github.com/5t3w3/blender-mcp-slim.git",
                 "blender-mcp-slim"
             ]
         }
@@ -104,6 +115,8 @@ Go to Claude > Settings > Developer > Edit Config > `claude_desktop_config.json`
             "args": [
                 "/c",
                 "uvx",
+                "--from",
+                "git+https://github.com/5t3w3/blender-mcp-slim.git",
                 "blender-mcp-slim"
             ]
         }
