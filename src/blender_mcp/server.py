@@ -1,5 +1,6 @@
 # blender_mcp_server.py
-from mcp.server.fastmcp import FastMCP, Context, Image
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context, Image
 import socket
 import json
 import logging
@@ -162,7 +163,7 @@ class BlenderConnection:
             raise Exception(f"Communication error with Blender: {str(e)}")
 
 @asynccontextmanager
-async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
+async def server_lifespan(server: MCPServer) -> AsyncIterator[Dict[str, Any]]:
     """Manage server startup and shutdown lifecycle"""
     # We don't need to create a connection here since we're using the global connection
     # for resources and tools
@@ -192,7 +193,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
         logger.info("BlenderMCP server shut down")
 
 # Create the MCP server with lifespan support
-mcp = FastMCP(
+mcp = MCPServer(
     "BlenderMCP",
     lifespan=server_lifespan
 )

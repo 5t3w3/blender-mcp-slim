@@ -33,7 +33,7 @@ This is a **privacy-focused fork with core MCP functionality only** of [BlenderM
 ### Prerequisites
 
 - Blender 3.0 or newer
-- Python 3.10 or newer
+- Python 3.11 or newer
 - uv package manager
 
 **macOS:**
@@ -147,6 +147,14 @@ The system uses a JSON-based protocol over TCP sockets:
 
 - The `execute_blender_code` tool allows running arbitrary Python code in Blender. Always save your work before using it.
 - Complex operations might need to be broken down into smaller steps.
+
+## Dependencies
+
+This server uses the official [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) v2 (`mcp>=2,<3`).
+
+- The `mcp` package pulls in an HTTP/auth stack (`starlette`, `uvicorn`, `httpx2`, `pyjwt[crypto]`) that a stdio-only server does not use.
+- `opentelemetry-api` is a transitive dependency in v2. No exporter is configured, so it is inert and **no telemetry is sent**. To be strict, no exporter should ever be configured for this server.
+- The `mcp[cli]` extra (typer, rich, python-dotenv) is intentionally **not** installed: this project runs `mcp.run()` directly and does not use the `mcp dev` / `mcp install` CLI.
 
 ## License
 
